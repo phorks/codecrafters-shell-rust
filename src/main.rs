@@ -3,21 +3,28 @@ use std::io::{self, Write};
 use std::{
     env,
     fs::{self},
+    iter::Peekable,
     path::PathBuf,
     process,
     str::Chars,
 };
 
 struct LineTokenIter<'a> {
-    chars: Chars<'a>,
+    chars: Peekable<Chars<'a>>,
 }
 
 impl<'a> LineTokenIter<'a> {
     pub fn new(line: &'a str) -> Self {
         LineTokenIter {
-            chars: line.chars(),
+            chars: line.chars().peekable(),
         }
     }
+}
+
+enum QuoteKind {
+    Single,
+    Double,
+    None,
 }
 
 impl<'a> Iterator for LineTokenIter<'a> {
@@ -25,26 +32,31 @@ impl<'a> Iterator for LineTokenIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut token = String::new();
-        let mut in_quotes = false;
-        let mut quote = ' ';
+        let mut quote = QuoteKind::None;
 
         while let Some(ch) = self.chars.next() {
-            match ch {
-                '"' if !in_quotes || quote == '"' => {
-                    quote = '"';
-                    in_quotes = !in_quotes
-                }
-                '\'' if !in_quotes || quote == '\'' => {
-                    quote = '\'';
-                    in_quotes = !in_quotes
-                }
-                '\\' => match self.chars.next() {
+            match (ch, &quote) {
+                ('"', QuoteKind::Double) => quote = QuoteKind::None,
+                ('"', QuoteKind::None) => quote = QuoteKind::Double,
+                ('\'', QuoteKind::Single) => quote = QuoteKind::None,
+                ('\'', QuoteKind::None) => quote = QuoteKind::Single,
+                ('\\', QuoteKind::None) => match self.chars.next() {
                     Some(next) => token.push(next),
                     None => panic!("Line ended in a '\\'."),
                 },
-                ' ' if !in_quotes && token.len() > 0 => break,
-                ' ' if token.len() == 0 => continue,
-                '\n' if !in_quotes && token.len() != 0 => break,
+                ('\\', QuoteKind::Double) => match self.chars.peek() {
+                    Some(next) => {
+                        if matches!(next, '\\' | '$' | '"' | '\n') {
+                            token.push(next.clone());
+                            self.chars.next().unwrap();
+                        } else {
+                            token.push('\\');
+                        }
+                    }
+                    None => panic!("Line ended in a '\\'."),
+                },
+                (' ' | '\n', QuoteKind::None) if token.len() > 0 => break,
+                (' ', _) if token.len() == 0 => continue,
                 _ => token.push(ch),
             }
         }
