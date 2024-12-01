@@ -4,6 +4,7 @@ use std::io::{self, Write};
 fn main() {
     let stdin = io::stdin();
     loop {
+        // prompt
         print!("$ ");
         io::stdout().flush().unwrap();
 
