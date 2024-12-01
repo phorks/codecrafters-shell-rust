@@ -43,7 +43,7 @@ impl<'a> Iterator for LineTokenIter<'a> {
                     None => panic!("Line ended in a '\\'."),
                 },
                 ' ' if !in_quotes && token.len() > 0 => break,
-                ' ' => continue,
+                ' ' if token.len() == 0 => continue,
                 '\n' if !in_quotes && token.len() != 0 => break,
                 _ => token.push(ch),
             }
