@@ -4,6 +4,7 @@ use std::{
     env,
     fs::{self},
     path::PathBuf,
+    process,
     str::Chars,
 };
 
@@ -51,7 +52,7 @@ enum Command {
     Exit(i32),
     Echo(Vec<String>),
     Type(Vec<String>),
-    NotFound,
+    NotFound(String, Vec<String>),
 }
 
 impl Command {
@@ -77,7 +78,7 @@ impl Command {
             }
             "echo" => Command::Echo(tokens.collect()),
             "type" => Command::Type(tokens.collect()),
-            _ => Command::NotFound,
+            _ => Command::NotFound(name, tokens.collect()),
         })
     }
 
@@ -168,9 +169,19 @@ fn main() {
                     }
                 }
             }
-            Command::NotFound => {
-                println!("{}: command not found", input.trim());
-            }
+            Command::NotFound(cmd, args) => match paths.expand(&cmd) {
+                Some(path) => {
+                    let Ok(output) = process::Command::new(&path).args(args).output() else {
+                        println!("{}: Failed to execute command", path.display());
+                        continue;
+                    };
+
+                    io::stdout().write(&output.stdout).unwrap();
+                }
+                _ => {
+                    println!("{}: command not found", input.trim());
+                }
+            },
         }
     }
 }
