@@ -1,6 +1,11 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
-use std::str::Chars;
+use std::{
+    env,
+    fs::{self},
+    path::PathBuf,
+    str::Chars,
+};
 
 struct LineTokenIter<'a> {
     chars: Chars<'a>,
@@ -81,8 +86,39 @@ impl Command {
     }
 }
 
+struct EnvPaths {
+    paths: Vec<PathBuf>,
+}
+
+impl EnvPaths {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let var = env::var("PATH")?;
+        Ok(EnvPaths {
+            paths: var.split(':').map(|x| PathBuf::from(x)).collect(),
+        })
+    }
+
+    pub fn expand(&self, command: &str) -> Option<PathBuf> {
+        for path in &self.paths {
+            let full_path = path.join(command);
+            let Ok(md) = fs::metadata(&full_path) else {
+                continue;
+            };
+
+            if md.is_file() {
+                return Some(full_path);
+            }
+        }
+
+        None
+    }
+}
+
 fn main() {
+    let paths = EnvPaths::from_env().unwrap();
+
     let stdin = io::stdin();
+
     loop {
         // prompt
         print!("$ ");
@@ -125,7 +161,10 @@ fn main() {
                     if Command::is_builtin(name) {
                         println!("{} is a shell builtin", name);
                     } else {
-                        println!("{}: not found", name);
+                        match paths.expand(name) {
+                            Some(path) => println!("{} is {}", name, path.display()),
+                            _ => println!("{}: not found", name),
+                        }
                     }
                 }
             }
