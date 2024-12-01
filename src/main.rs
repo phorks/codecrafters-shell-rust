@@ -26,10 +26,18 @@ impl<'a> Iterator for LineTokenIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let mut token = String::new();
         let mut in_quotes = false;
+        let mut quote = ' ';
 
         while let Some(ch) = self.chars.next() {
             match ch {
-                '"' => in_quotes = !in_quotes,
+                '"' if !in_quotes || quote == '"' => {
+                    quote = '"';
+                    in_quotes = !in_quotes
+                }
+                '\'' if !in_quotes || quote == '\'' => {
+                    quote = '\'';
+                    in_quotes = !in_quotes
+                }
                 '\\' => match self.chars.next() {
                     Some(next) => token.push(next),
                     None => panic!("Line ended in a '\\'."),
