@@ -52,6 +52,8 @@ enum Command {
     Exit(i32),
     Echo(Vec<String>),
     Type(Vec<String>),
+    Pwd,
+    Cd(Option<PathBuf>),
     NotFound(String, Vec<String>),
 }
 
@@ -78,6 +80,28 @@ impl Command {
             }
             "echo" => Command::Echo(tokens.collect()),
             "type" => Command::Type(tokens.collect()),
+            "pwd" => {
+                let rest = tokens.count();
+
+                if rest != 0 {
+                    anyhow::bail!("pwd: expected 0 arguments; got {}", rest);
+                }
+
+                Command::Pwd
+            }
+            "cd" => {
+                let rest: Vec<_> = tokens.collect();
+
+                let path = if rest.len() == 0 {
+                    None
+                } else if rest.len() == 1 {
+                    Some(PathBuf::from(&rest[0]))
+                } else {
+                    anyhow::bail!("Too many arguments for cd command")
+                };
+
+                Command::Cd(path)
+            }
             _ => Command::NotFound(name, tokens.collect()),
         })
     }
@@ -168,6 +192,14 @@ fn main() {
                         }
                     }
                 }
+            }
+            Command::Pwd => match env::current_dir() {
+                Ok(dir) => println!("{}", dir.display()),
+                Err(err) => println!("pwd: {}", err),
+            },
+            Command::Cd(path) => {
+                let Some(path) = path else { continue };
+                env::set_current_dir(path).unwrap();
             }
             Command::NotFound(cmd, args) => match paths.expand(&cmd) {
                 Some(path) => {
