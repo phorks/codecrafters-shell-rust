@@ -202,7 +202,17 @@ fn main() {
                 Err(err) => println!("pwd: {}", err),
             },
             Command::Cd(path) => {
-                let Some(path) = path else { continue };
+                let Some(mut path) = path else { continue };
+
+                if path.to_str() == Some("~") {
+                    match env::var("HOME") {
+                        Ok(home_dir) => path = PathBuf::from(home_dir),
+                        _ => {
+                            println!("cd: ~: home dir is not available");
+                            continue;
+                        }
+                    };
+                }
 
                 if !path.exists() {
                     println!("cd: {}: No such file or directory", path.display());
