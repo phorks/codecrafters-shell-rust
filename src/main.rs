@@ -94,7 +94,6 @@ fn main() {
 
         match command {
             Command::Exit(code) => {
-                println!("Exiting with code {}", code);
                 std::process::exit(code);
             }
             Command::NotFound => {
