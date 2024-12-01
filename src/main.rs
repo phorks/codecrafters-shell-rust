@@ -44,6 +44,7 @@ impl<'a> Iterator for LineTokenIter<'a> {
 
 enum Command {
     Exit(i32),
+    Echo(Vec<String>),
     NotFound,
 }
 
@@ -67,6 +68,10 @@ impl Command {
                 };
 
                 Command::Exit(code)
+            }
+            "echo" => {
+                let rest = tokens.collect();
+                Command::Echo(rest)
             }
             _ => Command::NotFound,
         })
@@ -95,6 +100,22 @@ fn main() {
         match command {
             Command::Exit(code) => {
                 std::process::exit(code);
+            }
+            Command::Echo(vec) => {
+                for i in 0..vec.len() {
+                    let message = if i != 0 {
+                        &format!(" {}", vec[i])
+                    } else {
+                        &vec[i]
+                    };
+
+                    print!("{}", message);
+                    io::stdout().flush().unwrap();
+                }
+
+                if vec.len() > 0 {
+                    println!("");
+                }
             }
             Command::NotFound => {
                 println!("{}: command not found", input.trim());
