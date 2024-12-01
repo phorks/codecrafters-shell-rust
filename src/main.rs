@@ -107,7 +107,11 @@ impl Command {
     }
 
     pub fn is_builtin(command: &str) -> bool {
-        return command == "exit" || command == "echo" || command == "type";
+        return command == "exit"
+            || command == "echo"
+            || command == "type"
+            || command == "pwd"
+            || command == "cd";
     }
 }
 
