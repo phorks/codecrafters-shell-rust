@@ -203,6 +203,12 @@ fn main() {
             },
             Command::Cd(path) => {
                 let Some(path) = path else { continue };
+
+                if !path.exists() {
+                    println!("cd: {}: No such file or directory", path.display());
+                    continue;
+                }
+
                 env::set_current_dir(path).unwrap();
             }
             Command::NotFound(cmd, args) => match paths.expand(&cmd) {
