@@ -45,6 +45,7 @@ impl<'a> Iterator for LineTokenIter<'a> {
 enum Command {
     Exit(i32),
     Echo(Vec<String>),
+    Type(Vec<String>),
     NotFound,
 }
 
@@ -69,12 +70,14 @@ impl Command {
 
                 Command::Exit(code)
             }
-            "echo" => {
-                let rest = tokens.collect();
-                Command::Echo(rest)
-            }
+            "echo" => Command::Echo(tokens.collect()),
+            "type" => Command::Type(tokens.collect()),
             _ => Command::NotFound,
         })
+    }
+
+    pub fn is_builtin(command: &str) -> bool {
+        return command == "exit" || command == "echo" || command == "type";
     }
 }
 
@@ -115,6 +118,15 @@ fn main() {
 
                 if vec.len() > 0 {
                     println!("");
+                }
+            }
+            Command::Type(vec) => {
+                for name in &vec {
+                    if Command::is_builtin(name) {
+                        println!("{} is a shell builtin", name);
+                    } else {
+                        println!("{}: not found", name);
+                    }
                 }
             }
             Command::NotFound => {
