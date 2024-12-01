@@ -29,11 +29,16 @@ impl<'a> Iterator for LineTokenIter<'a> {
                     None => panic!("Line ended in a '\\'."),
                 },
                 ' ' if !in_quotes && token.len() != 0 => break,
+                '\n' if !in_quotes && token.len() != 0 => break,
                 _ => token.push(ch),
             }
         }
 
-        Some(token)
+        if token.len() > 0 {
+            Some(token)
+        } else {
+            None
+        }
     }
 }
 
@@ -89,6 +94,7 @@ fn main() {
 
         match command {
             Command::Exit(code) => {
+                println!("Exiting with code {}", code);
                 std::process::exit(code);
             }
             Command::NotFound => {
