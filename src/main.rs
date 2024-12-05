@@ -9,6 +9,9 @@ use std::{
     str::Chars,
 };
 
+use strum::VariantArray;
+use strum_macros::{EnumDiscriminants, VariantArray};
+
 struct LineTokenIter<'a> {
     chars: Peekable<Chars<'a>>,
 }
@@ -69,6 +72,8 @@ impl<'a> Iterator for LineTokenIter<'a> {
     }
 }
 
+#[derive(EnumDiscriminants)]
+#[strum_discriminants(derive(VariantArray))]
 enum Command {
     Exit(i32),
     Echo(Vec<String>),
@@ -76,6 +81,25 @@ enum Command {
     Pwd,
     Cd(Option<PathBuf>),
     NotFound(String, Vec<String>),
+}
+
+impl CommandDiscriminants {
+    fn builtin_name(&self) -> Option<&'static str> {
+        match self {
+            CommandDiscriminants::Exit => Some("exit"),
+            CommandDiscriminants::Echo => Some("echo"),
+            CommandDiscriminants::Type => Some("type"),
+            CommandDiscriminants::Pwd => Some("pwd"),
+            CommandDiscriminants::Cd => Some("cd"),
+            CommandDiscriminants::NotFound => None,
+        }
+    }
+
+    pub fn is_builtin(command: &str) -> bool {
+        return CommandDiscriminants::VARIANTS
+            .iter()
+            .any(|x| x.builtin_name().map(|x| x == command).unwrap_or(false));
+    }
 }
 
 impl Command {
@@ -125,14 +149,6 @@ impl Command {
             }
             _ => Command::NotFound(name, tokens.collect()),
         })
-    }
-
-    pub fn is_builtin(command: &str) -> bool {
-        return command == "exit"
-            || command == "echo"
-            || command == "type"
-            || command == "pwd"
-            || command == "cd";
     }
 }
 
@@ -208,7 +224,7 @@ fn main() {
             }
             Command::Type(vec) => {
                 for name in &vec {
-                    if Command::is_builtin(name) {
+                    if CommandDiscriminants::is_builtin(name) {
                         println!("{} is a shell builtin", name);
                     } else {
                         match paths.expand(name) {

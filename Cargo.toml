@@ -1,11 +1,13 @@
 [package]
 name = "codecrafters-shell"
 version = "0.1.0"
-authors = ["Codecrafters <hello@codecrafters.io>"]
+authors = ["Pharaz Fadaei"]
 edition = "2021"
 rust-version = "1.80"
 
 [dependencies]
-anyhow = "1.0.68"                                # error handling
-bytes = "1.3.0"                                  # helps manage buffers
-thiserror = "1.0.38"                             # error handling
+anyhow = "1.0.68"     # error handling
+bytes = "1.3.0"       # helps manage buffers
+strum = "0.26.3"
+strum_macros = "0.26"
+thiserror = "1.0.38"  # error handling
