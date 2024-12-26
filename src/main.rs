@@ -76,18 +76,18 @@ impl<'a> Iterator for LineTokenIter<'a> {
                 ('>', QuoteKind::None) => {
                     if token.len() > 0 {
                         if token.chars().all(|x| x.is_ascii_digit()) || token == "&" {
+                            token.push('>');
                             self.chars.by_ref().for_each(|x| token.push(x));
                             self.redirection = Some(token);
-                            dbg!("Found lt, {}", &self.redirection);
                             return None;
                         } else {
-                            self.redirection = Some(self.chars.by_ref().collect());
-                            dbg!("Found lt, {}", &self.redirection);
+                            self.redirection =
+                                Some(format!(">{}", self.chars.by_ref().collect::<String>()));
                             break;
                         }
                     } else {
-                        self.redirection = Some(self.chars.by_ref().collect());
-                        dbg!("Found lt, {}", &self.redirection);
+                        self.redirection =
+                            Some(format!(">{}", self.chars.by_ref().collect::<String>()));
                         break;
                     }
                 }
