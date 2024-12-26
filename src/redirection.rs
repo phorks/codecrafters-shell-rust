@@ -20,6 +20,7 @@ pub struct Redirection {
 
 impl Redirection {
     pub fn parse(value: &str) -> Option<Redirection> {
+        println!("Redirection string: {}", value);
         if value.len() == 0 {
             return None;
         }
@@ -32,7 +33,7 @@ impl Redirection {
                 .by_ref()
                 .take_while(|x| x.is_ascii_digit())
                 .fold(0, |acc, e| (10 * acc) + ((e as u8 - '0' as u8) as u32));
-            if n == 1 {
+            if n == 0 || n == 1 {
                 // do nothing
             } else if n == 2 {
                 source = RedirectionSource::Stderr;
