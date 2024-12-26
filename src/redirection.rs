@@ -34,16 +34,20 @@ impl Redirection {
             source = RedirectionSource::Both;
             chars.next().unwrap();
         } else {
-            let n = chars
+            let n_str = chars
                 .by_ref()
                 .peeking_take_while(|x| x.is_ascii_digit())
-                .fold(0, |acc, e| (10 * acc) + ((e as u8 - '0' as u8) as u32));
-            if n == 0 || n == 1 {
-                // do nothing
-            } else if n == 2 {
-                source = RedirectionSource::Stderr;
-            } else {
-                return None;
+                .collect::<String>();
+
+            if n_str.len() > 0 {
+                let n = n_str.parse::<u32>().unwrap();
+                if n == 0 || n == 1 {
+                    // do nothing
+                } else if n == 2 {
+                    source = RedirectionSource::Stderr;
+                } else {
+                    return None;
+                }
             }
         }
 
