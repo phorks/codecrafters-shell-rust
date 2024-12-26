@@ -20,6 +20,7 @@ pub struct Redirection {
 
 impl Redirection {
     pub fn parse(value: &str) -> Option<Redirection> {
+        dbg!(value);
         if value.len() == 0 {
             return None;
         }
