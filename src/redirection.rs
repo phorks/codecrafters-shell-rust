@@ -23,10 +23,13 @@ impl Redirection {
         if value.len() == 0 {
             return None;
         }
+
         let mut chars = value.chars().peekable();
         let mut source = RedirectionSource::Stdout;
-        if chars.next().unwrap() == '&' {
+
+        if *chars.peek().unwrap() == '&' {
             source = RedirectionSource::Both;
+            chars.next().unwrap();
         } else {
             let n = chars
                 .by_ref()
@@ -42,14 +45,13 @@ impl Redirection {
         }
 
         let n_lt = chars.by_ref().take_while(|x| *x == '>').count();
+        dbg!(n_lt);
 
         let mode = match n_lt {
             1 => RedirectionMode::Write,
             2 => RedirectionMode::Append,
             _ => return None,
         };
-
-        eprintln!("Not none");
 
         Some(Redirection {
             source,
