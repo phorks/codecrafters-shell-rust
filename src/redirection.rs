@@ -1,3 +1,5 @@
+use peeking_take_while::PeekableExt;
+
 #[derive(Clone)]
 pub enum RedirectionMode {
     Write,
@@ -34,7 +36,7 @@ impl Redirection {
         } else {
             let n = chars
                 .by_ref()
-                .take_while(|x| x.is_ascii_digit())
+                .peeking_take_while(|x| x.is_ascii_digit())
                 .fold(0, |acc, e| (10 * acc) + ((e as u8 - '0' as u8) as u32));
             if n == 0 || n == 1 {
                 // do nothing
