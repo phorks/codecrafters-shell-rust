@@ -44,6 +44,8 @@ impl Redirection {
             }
         }
 
+        dbg!(chars.by_ref().collect::<String>());
+
         let n_lt = chars.by_ref().take_while(|x| *x == '>').count();
         dbg!(n_lt);
 
