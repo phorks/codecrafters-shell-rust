@@ -3,10 +3,11 @@
 My repository for the CodeCrafters
 ["Build Your Own Shell" Challenge](https://app.codecrafters.io/courses/shell). 
 
-- Finished all 18 available stages, in 3 categories:
+- Finished all 22 available stages, in 4 categories:
   1. Basics
   2. Navigation
   3. Quoting
+  4. Redirection
 - Implemented 5 shell commands: exit, echo, type, pwd, cd
 - Implemented program execution
 

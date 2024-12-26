@@ -411,8 +411,11 @@ fn main() {
                         continue;
                     };
 
-                    stdout.write(&output.stdout).unwrap();
-                    stderr.write(&output.stderr).unwrap();
+                    let stdout_output = output.stdout.split(|x| *x == b'/').last().unwrap();
+                    let stderr_output = output.stderr.split(|x| *x == b'/').last().unwrap();
+
+                    stdout.write(&stdout_output).unwrap();
+                    stderr.write(&stderr_output).unwrap();
                 }
                 _ => {
                     writeln!(&mut stderr, "{}: command not found", input.trim()).unwrap();
