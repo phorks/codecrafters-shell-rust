@@ -22,7 +22,6 @@ pub struct Redirection {
 
 impl Redirection {
     pub fn parse(value: &str) -> Option<Redirection> {
-        dbg!(value);
         if value.len() == 0 {
             return None;
         }
@@ -51,10 +50,7 @@ impl Redirection {
             }
         }
 
-        dbg!(chars.by_ref().collect::<String>());
-
         let n_lt = chars.by_ref().take_while(|x| *x == '>').count();
-        dbg!(n_lt);
 
         let mode = match n_lt {
             1 => RedirectionMode::Write,
