@@ -191,6 +191,7 @@ impl InputCommand {
     fn out(&self) -> anyhow::Result<CommandOutput> {
         let redirect = match self.redirect.clone() {
             Some(redirect) => {
+                println!("Redirect is not none {}", redirect.target);
                 let mut options = OpenOptions::new();
                 let mut options = options.create(true);
                 options = match redirect.mode {
