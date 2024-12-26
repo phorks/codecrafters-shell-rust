@@ -49,6 +49,8 @@ impl Redirection {
             _ => return None,
         };
 
+        eprintln!("Not none");
+
         Some(Redirection {
             source,
             mode,
