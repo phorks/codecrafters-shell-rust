@@ -1,9 +1,11 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::{
+    cell::RefCell,
     env,
-    fs::{self},
+    fs::{self, OpenOptions},
     iter::Peekable,
+    marker::PhantomData,
     path::PathBuf,
     process,
     str::Chars,
@@ -14,13 +16,21 @@ use strum_macros::{EnumDiscriminants, VariantArray};
 
 struct LineTokenIter<'a> {
     chars: Peekable<Chars<'a>>,
+    redirection: Option<String>,
 }
 
 impl<'a> LineTokenIter<'a> {
     pub fn new(line: &'a str) -> Self {
         LineTokenIter {
             chars: line.chars().peekable(),
+            redirection: None,
         }
+    }
+
+    fn redirection(&self) -> Option<Redirection> {
+        self.redirection
+            .as_ref()
+            .and_then(|x| Redirection::parse(x))
     }
 }
 
@@ -60,6 +70,21 @@ impl<'a> Iterator for LineTokenIter<'a> {
                 },
                 (' ' | '\n', QuoteKind::None) if token.len() > 0 => break,
                 (' ', _) if token.len() == 0 => continue,
+                ('>', QuoteKind::None) => {
+                    if token.len() > 0 {
+                        if token.chars().all(|x| x.is_ascii_digit()) || token == "&" {
+                            self.chars.by_ref().for_each(|x| token.push(x));
+                            self.redirection = Some(token);
+                            return None;
+                        } else {
+                            self.redirection = Some(self.chars.by_ref().collect());
+                            break;
+                        }
+                    } else {
+                        self.redirection = Some(self.chars.by_ref().collect());
+                        break;
+                    }
+                }
                 _ => token.push(ch),
             }
         }
@@ -102,8 +127,75 @@ impl CommandDiscriminants {
     }
 }
 
-impl Command {
-    pub fn parse(line: &str) -> anyhow::Result<Command> {
+#[derive(Clone)]
+enum RedirectionMode {
+    Write,
+    Append,
+}
+
+#[derive(Clone)]
+enum RedirectionSource {
+    Stdout,
+    Stderr,
+    Both,
+}
+
+#[derive(Clone)]
+struct Redirection {
+    source: RedirectionSource,
+    mode: RedirectionMode,
+    target: String,
+}
+
+impl Redirection {
+    fn parse(value: &str) -> Option<Redirection> {
+        if value.len() == 0 {
+            return None;
+        }
+        let mut chars = value.chars().peekable();
+        let mut source = RedirectionSource::Stdout;
+        if chars.next().unwrap() == '&' {
+            source = RedirectionSource::Both;
+        } else {
+            let n = chars
+                .by_ref()
+                .take_while(|x| x.is_ascii_digit())
+                .fold(0, |acc, e| (10 * acc) + ((e as u8 - '0' as u8) as u32));
+            if n == 1 {
+                // do nothing
+            } else if n == 2 {
+                source = RedirectionSource::Stderr;
+            } else {
+                return None;
+            }
+        }
+
+        let n_lt = chars.by_ref().take_while(|x| *x == '>').count();
+
+        let mode = match n_lt {
+            1 => RedirectionMode::Write,
+            2 => RedirectionMode::Append,
+            _ => return None,
+        };
+
+        Some(Redirection {
+            source,
+            mode,
+            target: chars
+                .skip_while(|x| x.is_whitespace())
+                .take_while(|x| !x.is_whitespace())
+                .collect(),
+        })
+    }
+}
+
+struct InputCommand {
+    command: Command,
+    redirect: Option<Redirection>,
+}
+
+impl InputCommand {
+    pub fn parse(line: &str) -> anyhow::Result<InputCommand> {
         let mut tokens = LineTokenIter::new(line);
 
         let name = match tokens.next() {
@@ -111,10 +203,10 @@ impl Command {
             None => anyhow::bail!("Line is empty"),
         };
 
-        Ok(match name.as_ref() {
-            "exit" => {
-                let rest: Vec<_> = tokens.collect();
+        let rest = tokens.by_ref().collect::<Vec<_>>();
 
+        let command = match name.as_ref() {
+            "exit" => {
                 let code = match rest.len() {
                     0 => 127,
                     1 => rest[0].parse()?,
@@ -123,20 +215,16 @@ impl Command {
 
                 Command::Exit(code)
             }
-            "echo" => Command::Echo(tokens.collect()),
-            "type" => Command::Type(tokens.collect()),
+            "echo" => Command::Echo(rest),
+            "type" => Command::Type(rest),
             "pwd" => {
-                let rest = tokens.count();
-
-                if rest != 0 {
-                    anyhow::bail!("pwd: expected 0 arguments; got {}", rest);
+                if rest.len() != 0 {
+                    anyhow::bail!("pwd: expected 0 arguments; got {}", rest.len());
                 }
 
                 Command::Pwd
             }
             "cd" => {
-                let rest: Vec<_> = tokens.collect();
-
                 let path = if rest.len() == 0 {
                     None
                 } else if rest.len() == 1 {
@@ -147,8 +235,107 @@ impl Command {
 
                 Command::Cd(path)
             }
-            _ => Command::NotFound(name, tokens.collect()),
+            _ => Command::NotFound(name, rest),
+        };
+
+        Ok(InputCommand {
+            command,
+            redirect: tokens.redirection(),
         })
+    }
+
+    fn out(&self) -> anyhow::Result<CommandOutput> {
+        let redirect = match self.redirect.clone() {
+            Some(redirect) => {
+                let mut options = OpenOptions::new();
+                let mut options = options.create(true);
+                options = match redirect.mode {
+                    RedirectionMode::Write => options.write(true),
+                    RedirectionMode::Append => options.append(true),
+                };
+
+                let file = options
+                    .open(&redirect.target)
+                    .map_err(anyhow::Error::from)?;
+                Some((redirect, RefCell::new(file)))
+            }
+            _ => None,
+        };
+
+        Ok(CommandOutput {
+            redirect,
+            _not_send: Default::default(),
+        })
+    }
+}
+
+struct CommandOutput {
+    redirect: Option<(Redirection, RefCell<std::fs::File>)>,
+    _not_send: PhantomData<*const ()>, // since `redirect` can be shared between stdout and stderr, we must make this type !Send
+}
+
+impl CommandOutput {
+    fn writers(
+        &self,
+    ) -> (
+        CommandWriter<std::io::Stdout>,
+        CommandWriter<std::io::Stderr>,
+    ) {
+        (
+            CommandWriter {
+                handle: std::io::stdout(),
+                target: CommandWriterTarget::Stdout,
+                output: self,
+            },
+            CommandWriter {
+                handle: std::io::stderr(),
+                target: CommandWriterTarget::Stderr,
+                output: self,
+            },
+        )
+    }
+}
+
+enum CommandWriterTarget {
+    Stdout,
+    Stderr,
+}
+
+impl CommandWriterTarget {
+    fn matches_source(&self, src: &RedirectionSource) -> bool {
+        match src {
+            RedirectionSource::Stdout => matches!(self, CommandWriterTarget::Stdout),
+            RedirectionSource::Stderr => matches!(self, CommandWriterTarget::Stderr),
+            RedirectionSource::Both => true,
+        }
+    }
+}
+
+struct CommandWriter<'a, S: Write> {
+    target: CommandWriterTarget,
+    output: &'a CommandOutput,
+    handle: S,
+}
+
+impl<'a, S: Write> Write for CommandWriter<'a, S> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let x = &self.output;
+        let y = &x.redirect;
+        match y {
+            Some((ref redirect, ref file)) if self.target.matches_source(&redirect.source) => {
+                file.borrow_mut().write(buf)
+            }
+            _ => self.handle.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match &self.output.redirect {
+            Some((redirect, ref file)) if self.target.matches_source(&redirect.source) => {
+                file.borrow_mut().flush()
+            }
+            _ => self.handle.flush(),
+        }
     }
 }
 
@@ -194,7 +381,7 @@ fn main() {
         let mut input = String::new();
         stdin.read_line(&mut input).unwrap();
 
-        let command = match Command::parse(&input) {
+        let command = match InputCommand::parse(&input) {
             Ok(cmd) => cmd,
             Err(err) => {
                 println!("{:?}", err);
@@ -202,7 +389,14 @@ fn main() {
             }
         };
 
-        match command {
+        let Ok(out) = command.out() else {
+            eprintln!("Failed to redirect");
+            continue;
+        };
+
+        let (mut stdout, mut stderr) = out.writers();
+
+        match command.command {
             Command::Exit(code) => {
                 std::process::exit(code);
             }
@@ -214,29 +408,31 @@ fn main() {
                         &vec[i]
                     };
 
-                    print!("{}", message);
+                    write!(&mut stdout, "{}", message).unwrap();
                     io::stdout().flush().unwrap();
                 }
 
                 if vec.len() > 0 {
-                    println!("");
+                    writeln!(&mut stdout, "").unwrap();
                 }
             }
             Command::Type(vec) => {
                 for name in &vec {
                     if CommandDiscriminants::is_builtin(name) {
-                        println!("{} is a shell builtin", name);
+                        writeln!(&mut stdout, "{} is a shell builtin", name).unwrap();
                     } else {
                         match paths.expand(name) {
-                            Some(path) => println!("{} is {}", name, path.display()),
-                            _ => println!("{}: not found", name),
+                            Some(path) => {
+                                writeln!(&mut stdout, "{} is {}", name, path.display()).unwrap()
+                            }
+                            _ => writeln!(&mut stderr, "{}: not found", name).unwrap(),
                         }
                     }
                 }
             }
             Command::Pwd => match env::current_dir() {
-                Ok(dir) => println!("{}", dir.display()),
-                Err(err) => println!("pwd: {}", err),
+                Ok(dir) => writeln!(&mut stdout, "{}", dir.display()).unwrap(),
+                Err(err) => writeln!(&mut stderr, "pwd: {}", err).unwrap(),
             },
             Command::Cd(path) => {
                 let Some(mut path) = path else { continue };
@@ -245,14 +441,19 @@ fn main() {
                     match env::var("HOME") {
                         Ok(home_dir) => path = PathBuf::from(home_dir),
                         _ => {
-                            println!("cd: ~: home dir is not available");
+                            writeln!(&mut stderr, "cd: ~: home dir is not available").unwrap();
                             continue;
                         }
                     };
                 }
 
                 if !path.exists() {
-                    println!("cd: {}: No such file or directory", path.display());
+                    writeln!(
+                        &mut stderr,
+                        "cd: {}: No such file or directory",
+                        path.display()
+                    )
+                    .unwrap();
                     continue;
                 }
 
@@ -261,14 +462,16 @@ fn main() {
             Command::NotFound(cmd, args) => match paths.expand(&cmd) {
                 Some(path) => {
                     let Ok(output) = process::Command::new(&path).args(args).output() else {
-                        println!("{}: Failed to execute command", path.display());
+                        writeln!(&mut stderr, "{}: Failed to execute command", path.display())
+                            .unwrap();
                         continue;
                     };
 
-                    io::stdout().write(&output.stdout).unwrap();
+                    stdout.write(&output.stdout).unwrap();
+                    stderr.write(&output.stderr).unwrap();
                 }
                 _ => {
-                    println!("{}: command not found", input.trim());
+                    writeln!(&mut stderr, "{}: command not found", input.trim()).unwrap();
                 }
             },
         }
