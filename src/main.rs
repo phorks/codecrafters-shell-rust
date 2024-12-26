@@ -412,7 +412,7 @@ fn main() {
                     };
 
                     stdout.write(&output.stdout).unwrap();
-                    stderr.write(&output.stderr).unwrap();
+                    // stderr.write(&output.stderr).unwrap();
                 }
                 _ => {
                     writeln!(&mut stderr, "{}: command not found", input.trim()).unwrap();
