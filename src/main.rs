@@ -11,8 +11,11 @@ use std::{
     str::Chars,
 };
 
+use redirection::{Redirection, RedirectionMode, RedirectionSource};
 use strum::VariantArray;
 use strum_macros::{EnumDiscriminants, VariantArray};
+
+mod redirection;
 
 struct LineTokenIter<'a> {
     chars: Peekable<Chars<'a>>,
@@ -75,13 +78,16 @@ impl<'a> Iterator for LineTokenIter<'a> {
                         if token.chars().all(|x| x.is_ascii_digit()) || token == "&" {
                             self.chars.by_ref().for_each(|x| token.push(x));
                             self.redirection = Some(token);
+                            dbg!("Found lt, {}", &self.redirection);
                             return None;
                         } else {
                             self.redirection = Some(self.chars.by_ref().collect());
+                            dbg!("Found lt, {}", &self.redirection);
                             break;
                         }
                     } else {
                         self.redirection = Some(self.chars.by_ref().collect());
+                        dbg!("Found lt, {}", &self.redirection);
                         break;
                     }
                 }
@@ -124,68 +130,6 @@ impl CommandDiscriminants {
         return CommandDiscriminants::VARIANTS
             .iter()
             .any(|x| x.builtin_name().map(|x| x == command).unwrap_or(false));
-    }
-}
-
-#[derive(Clone)]
-enum RedirectionMode {
-    Write,
-    Append,
-}
-
-#[derive(Clone)]
-enum RedirectionSource {
-    Stdout,
-    Stderr,
-    Both,
-}
-
-#[derive(Clone)]
-struct Redirection {
-    source: RedirectionSource,
-    mode: RedirectionMode,
-    target: String,
-}
-
-impl Redirection {
-    fn parse(value: &str) -> Option<Redirection> {
-        if value.len() == 0 {
-            return None;
-        }
-        let mut chars = value.chars().peekable();
-        let mut source = RedirectionSource::Stdout;
-        if chars.next().unwrap() == '&' {
-            source = RedirectionSource::Both;
-        } else {
-            let n = chars
-                .by_ref()
-                .take_while(|x| x.is_ascii_digit())
-                .fold(0, |acc, e| (10 * acc) + ((e as u8 - '0' as u8) as u32));
-            if n == 1 {
-                // do nothing
-            } else if n == 2 {
-                source = RedirectionSource::Stderr;
-            } else {
-                return None;
-            }
-        }
-
-        let n_lt = chars.by_ref().take_while(|x| *x == '>').count();
-
-        let mode = match n_lt {
-            1 => RedirectionMode::Write,
-            2 => RedirectionMode::Append,
-            _ => return None,
-        };
-
-        Some(Redirection {
-            source,
-            mode,
-            target: chars
-                .skip_while(|x| x.is_whitespace())
-                .take_while(|x| !x.is_whitespace())
-                .collect(),
-        })
     }
 }
 
